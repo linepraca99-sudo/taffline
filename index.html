@@ -1,0 +1,954 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Taffline — Trouve ton taf</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+  :root {
+    --ink: #1B2430;
+    --ink-soft: #2E3A4E;
+    --navy: #3B5B7E;
+    --navy-border: #6C89A5;
+    --paper: #F7F5F1;
+    --paper-card: #FFFFFF;
+    --orange: #FF6B35;
+    --orange-dark: #E85A2A;
+    --slate: #6B7280;
+    --green: #2D9C6F;
+    --red: #B23A1F;
+    --border: #E4E0D8;
+    --radius: 10px;
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    background: var(--paper);
+    color: var(--ink);
+    font-family: 'Inter', sans-serif;
+    line-height: 1.5;
+  }
+
+  h1, h2, h3, .brand { font-family: 'Space Grotesk', sans-serif; }
+
+  header {
+    background: var(--navy);
+    color: var(--paper);
+    padding: 18px 24px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 12px;
+    position: sticky;
+    top: 0;
+    z-index: 50;
+  }
+
+  .brand {
+    font-size: 22px;
+    font-weight: 700;
+    letter-spacing: -0.5px;
+    color: var(--paper);
+    text-decoration: none;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    cursor: pointer;
+  }
+  .brand::before { content: "●"; color: var(--orange); font-size: 12px; }
+
+  #auth-status { display: flex; align-items: center; gap: 12px; font-size: 14px; flex-wrap: wrap; }
+  #auth-status span { color: #B8C0CC; }
+
+  button, .btn {
+    font-family: 'Inter', sans-serif;
+    font-weight: 600;
+    border: none;
+    border-radius: 8px;
+    padding: 10px 18px;
+    cursor: pointer;
+    font-size: 14px;
+    transition: transform 0.1s ease, opacity 0.15s ease;
+  }
+  button:active { transform: scale(0.97); }
+
+  .btn-primary { background: var(--orange); color: white; }
+  .btn-primary:hover { background: var(--orange-dark); }
+  .btn-ghost { background: transparent; color: var(--paper); border: 1px solid var(--navy-border); }
+  .btn-ghost:hover { border-color: var(--orange); }
+  .btn-outline { background: transparent; color: var(--ink); border: 1.5px solid var(--ink); }
+  .btn-outline:hover { background: var(--ink); color: white; }
+  .btn-danger { background: transparent; color: var(--red); border: 1.5px solid var(--red); }
+  .btn-danger:hover { background: var(--red); color: white; }
+  .btn-small { padding: 6px 12px; font-size: 12px; }
+
+  .hero { max-width: 980px; margin: 0 auto; padding: 48px 24px 28px; text-align: center; }
+  .hero h1 { font-size: clamp(20px, 3vw, 26px); font-weight: 700; margin: 0 0 10px; letter-spacing: -0.5px; }
+  .hero p { color: var(--slate); font-size: 16px; max-width: 480px; margin: 0 auto 28px; }
+
+  .mode-switch {
+    display: inline-flex; background: var(--navy); border-radius: 999px; padding: 5px; position: relative;
+    box-shadow: 0 4px 16px rgba(59,91,126,0.2);
+  }
+  .mode-switch button { background: transparent; color: #D6E2EC; padding: 12px 26px; border-radius: 999px; font-size: 14px; position: relative; z-index: 2; }
+  .mode-switch button.active { color: var(--navy); }
+  .mode-switch .slider {
+    position: absolute; top: 5px; left: 5px; height: calc(100% - 10px); width: calc(50% - 5px);
+    background: var(--orange); border-radius: 999px; transition: transform 0.25s cubic-bezier(0.4,0,0.2,1); z-index: 1;
+  }
+  .mode-switch.recruteur .slider { transform: translateX(100%); }
+
+  main { max-width: 980px; margin: 0 auto; padding: 0 24px 80px; }
+
+  .tabs { display: flex; gap: 6px; margin-bottom: 20px; border-bottom: 1px solid var(--border); }
+  .tab-btn {
+    background: transparent; color: var(--slate); border: none; border-bottom: 3px solid transparent;
+    border-radius: 0; padding: 10px 4px; margin-right: 20px; font-size: 14px;
+  }
+  .tab-btn.active { color: var(--ink); border-bottom-color: var(--orange); }
+  .tab-panel { display: none; }
+  .tab-panel.active { display: block; }
+
+  .panel { background: var(--paper-card); border: 1px solid var(--border); border-radius: var(--radius); padding: 26px; margin-bottom: 24px; }
+  .panel h2 { margin-top: 0; font-size: 19px; }
+  .hidden { display: none !important; }
+
+  form { display: flex; flex-direction: column; gap: 14px; }
+  .row { display: flex; gap: 14px; flex-wrap: wrap; }
+  .row > * { flex: 1; min-width: 180px; }
+
+  label { font-size: 13px; font-weight: 600; color: var(--slate); margin-bottom: 4px; display: block; }
+  input, select, textarea {
+    width: 100%; padding: 10px 12px; border: 1.5px solid var(--border); border-radius: 8px;
+    font-family: 'Inter', sans-serif; font-size: 14px; background: white; color: var(--ink);
+  }
+  input:focus, select:focus, textarea:focus { outline: none; border-color: var(--orange); }
+  textarea { resize: vertical; min-height: 90px; }
+  input[type="checkbox"] { width: auto; }
+  .checkbox-row { display: flex; align-items: center; gap: 8px; flex: 0 0 auto; }
+  .checkbox-row label { margin: 0; }
+
+  .msg { font-size: 14px; padding: 10px 14px; border-radius: 8px; margin-top: 4px; }
+  .msg.error { background: #FCE8E4; color: var(--red); }
+  .msg.success { background: #E4F5EC; color: #1E7A50; }
+
+  .search-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 10px; margin-bottom: 14px; }
+
+  .job-card { background: var(--paper-card); border: 1px solid var(--border); border-left: 4px solid var(--orange); border-radius: var(--radius); padding: 20px; margin-bottom: 14px; }
+  .job-card.inactive { border-left-color: var(--slate); opacity: 0.7; }
+  .job-card h3 { margin: 0 0 4px; font-size: 17px; }
+  .job-meta { display: flex; gap: 12px; flex-wrap: wrap; font-size: 13px; color: var(--slate); margin-bottom: 10px; }
+  .tag { display: inline-block; background: var(--paper); border: 1px solid var(--border); border-radius: 999px; padding: 3px 10px; font-size: 12px; color: var(--ink-soft); font-weight: 600; }
+  .job-desc { font-size: 14px; color: var(--ink-soft); margin-bottom: 14px; white-space: pre-line; }
+  .job-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+
+  .empty-state { text-align: center; padding: 40px 20px; color: var(--slate); font-size: 14px; }
+
+  .status-badge { display: inline-block; padding: 3px 10px; border-radius: 999px; font-size: 12px; font-weight: 600; }
+  .status-envoyée { background: #EEF1F5; color: var(--slate); }
+  .status-vue { background: #FFF3E4; color: #B36B00; }
+  .status-acceptée { background: #E4F5EC; color: #1E7A50; }
+  .status-refusée { background: #FCE8E4; color: var(--red); }
+
+  .applicant-row { display: flex; justify-content: space-between; align-items: center; padding: 12px 0; border-bottom: 1px solid var(--border); gap: 10px; flex-wrap: wrap; }
+  .applicant-row:last-child { border-bottom: none; }
+  .applicant-info { font-size: 14px; }
+  .applicant-info a { color: var(--orange); }
+
+  footer { text-align: center; padding: 24px; font-size: 13px; color: var(--slate); }
+  footer a { color: var(--slate); margin: 0 8px; }
+
+  .toggle-link { background: none; border: none; color: var(--orange); font-weight: 600; cursor: pointer; padding: 0; font-size: 13px; }
+
+  .modal-overlay {
+    position: fixed; inset: 0; background: rgba(27,36,48,0.5); display: flex; align-items: center; justify-content: center;
+    padding: 20px; z-index: 100;
+  }
+  .modal-box { background: white; border-radius: var(--radius); padding: 28px; max-width: 560px; width: 100%; max-height: 80vh; overflow-y: auto; }
+  .modal-box h2 { margin-top: 0; }
+  .modal-close { float: right; background: none; border: none; font-size: 20px; cursor: pointer; color: var(--slate); padding: 0; }
+</style>
+</head>
+<body>
+
+<header>
+  <a class="brand" id="brand-home">Taffline</a>
+  <div id="auth-status">
+    <span id="user-info">Non connecté</span>
+    <button id="btn-show-auth" class="btn-ghost">Se connecter</button>
+    <button id="btn-logout" class="btn-ghost hidden">Se déconnecter</button>
+  </div>
+</header>
+
+<div class="hero">
+  <h1 id="hero-title">Trouve ton taf et ta line.</h1>
+  <p id="hero-subtitle"></p>
+  <div class="mode-switch" id="mode-switch">
+    <div class="slider"></div>
+    <button id="mode-candidat" class="active">Je cherche un taf</button>
+    <button id="mode-recruteur">Je recrute</button>
+  </div>
+</div>
+
+<main>
+
+  <!-- ===== AUTH ===== -->
+  <section id="auth-panel" class="panel hidden">
+    <h2 id="auth-title">Créer un compte</h2>
+    <form id="auth-form">
+      <div id="signup-fields">
+        <div class="row">
+          <div>
+            <label for="nom_complet">Nom complet</label>
+            <input type="text" id="nom_complet" placeholder="Jean Dupont">
+          </div>
+          <div id="entreprise-field" class="hidden">
+            <label for="entreprise">Nom de l'entreprise</label>
+            <input type="text" id="entreprise" placeholder="Ma Société SARL">
+          </div>
+          <div id="niveau-etude-field">
+            <label for="niveau_etude">Niveau d'études</label>
+            <select id="niveau_etude">
+              <option value="">Non précisé</option>
+              <option>Aucun</option>
+              <option>CAP/BEP</option>
+              <option>Bac</option>
+              <option>Bac+2</option>
+              <option>Bac+3</option>
+              <option>Bac+5</option>
+              <option>Bac+8</option>
+            </select>
+          </div>
+        </div>
+      </div>
+      <div class="row">
+        <div>
+          <label for="email">Email</label>
+          <input type="email" id="email" required placeholder="toi@exemple.com">
+        </div>
+        <div>
+          <label for="password">Mot de passe</label>
+          <input type="password" id="password" required minlength="6" placeholder="6 caractères minimum">
+        </div>
+      </div>
+      <button type="submit" class="btn-primary" id="auth-submit">Créer mon compte</button>
+      <div id="auth-msg"></div>
+      <div>
+        <span style="font-size:13px; color:var(--slate);">Déjà un compte ?</span>
+        <button type="button" class="toggle-link" id="toggle-auth-mode">Se connecter</button>
+      </div>
+    </form>
+  </section>
+
+  <!-- ===== VUE CANDIDAT ===== -->
+  <section id="view-candidat">
+    <div class="tabs">
+      <button class="tab-btn active" data-tab="recherche">Rechercher</button>
+      <button class="tab-btn" data-tab="candidatures">Mes candidatures</button>
+      <button class="tab-btn" data-tab="favoris">Mes favoris</button>
+      <button class="tab-btn" data-tab="mon-profil">Mon profil</button>
+    </div>
+
+    <div class="tab-panel active" id="tab-recherche">
+      <div class="panel">
+        <h2>Chercher une offre</h2>
+        <div class="search-grid">
+          <div><label for="search-keyword">Métier / mot-clé</label><input type="text" id="search-keyword" placeholder="Ex : serveur, chauffeur..."></div>
+          <div><label for="search-localisation">Localité</label><input type="text" id="search-localisation" placeholder="Ex : Trifouillis-les-Oies"></div>
+          <div>
+            <label for="search-contrat">Type de contrat</label>
+            <select id="search-contrat">
+              <option value="">Tous les contrats</option>
+              <option>CDI</option><option>CDD</option><option>Intérim</option>
+              <option>Alternance</option><option>Stage</option><option>Freelance</option>
+            </select>
+          </div>
+          <div>
+            <label for="search-diplome">Diplôme</label>
+            <select id="search-diplome">
+              <option value="">Tous les diplômes</option>
+              <option>Aucun</option><option>CAP/BEP</option><option>Bac</option>
+              <option>Bac+2</option><option>Bac+3</option><option>Bac+5</option><option>Bac+8</option>
+            </select>
+          </div>
+          <div>
+            <label for="search-secteur">Secteur</label>
+            <select id="search-secteur">
+              <option value="">Tous les secteurs</option>
+              <option>BTP</option><option>Restauration</option><option>Informatique</option>
+              <option>Santé</option><option>Commerce</option><option>Transport</option>
+              <option>Industrie</option><option>Autre</option>
+            </select>
+          </div>
+          <div>
+            <label for="search-experience">Expérience</label>
+            <select id="search-experience">
+              <option value="">Toute expérience</option>
+              <option>Débutant accepté</option><option>1-3 ans</option><option>3-5 ans</option><option>5 ans et plus</option>
+            </select>
+          </div>
+          <div>
+            <label for="search-teletravail">Mode de travail</label>
+            <select id="search-teletravail">
+              <option value="">Sur site / télétravail</option>
+              <option>Sur site</option><option>Hybride</option><option>100% télétravail</option>
+            </select>
+          </div>
+        </div>
+        <button class="btn-primary" id="btn-search" style="align-self:flex-start;">Rechercher</button>
+      </div>
+      <div id="jobs-list"></div>
+    </div>
+
+    <div class="tab-panel" id="tab-candidatures">
+      <div class="panel"><h2>Mes candidatures</h2><div id="my-applications-list"></div></div>
+    </div>
+
+    <div class="tab-panel" id="tab-favoris">
+      <div class="panel"><h2>Mes offres favorites</h2><div id="favorites-list"></div></div>
+    </div>
+
+    <div class="tab-panel" id="tab-mon-profil">
+      <div class="panel">
+        <h2>Mon profil</h2>
+        <form id="profile-form">
+          <div class="row">
+            <div><label for="profile-nom">Nom complet</label><input type="text" id="profile-nom"></div>
+            <div><label for="profile-tel">Téléphone</label><input type="text" id="profile-tel"></div>
+            <div>
+              <label for="profile-niveau">Niveau d'études</label>
+              <select id="profile-niveau">
+                <option value="">Non précisé</option>
+                <option>Aucun</option><option>CAP/BEP</option><option>Bac</option>
+                <option>Bac+2</option><option>Bac+3</option><option>Bac+5</option><option>Bac+8</option>
+              </select>
+            </div>
+          </div>
+          <div>
+            <label for="profile-cv">Mon CV (PDF)</label>
+            <input type="file" id="profile-cv" accept="application/pdf">
+            <div id="cv-current" style="font-size:13px; margin-top:6px;"></div>
+          </div>
+          <button type="submit" class="btn-primary" style="align-self:flex-start;">Enregistrer</button>
+          <div id="profile-msg"></div>
+        </form>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===== VUE RECRUTEUR ===== -->
+  <section id="view-recruteur" class="hidden">
+    <div class="tabs">
+      <button class="tab-btn active" data-tab="publier">Publier une offre</button>
+      <button class="tab-btn" data-tab="mes-offres">Mes offres</button>
+    </div>
+
+    <div class="tab-panel active" id="tab-publier">
+      <div class="panel" id="post-job-panel">
+        <h2 id="job-form-title">Publier une offre</h2>
+        <form id="job-form">
+          <input type="hidden" id="job-edit-id" value="">
+          <div class="row">
+            <div><label for="job-titre">Intitulé du poste</label><input type="text" id="job-titre" required placeholder="Ex : Chauffeur-livreur"></div>
+            <div><label for="job-entreprise">Entreprise</label><input type="text" id="job-entreprise" required placeholder="Nom de l'entreprise"></div>
+          </div>
+          <div class="row">
+            <div><label for="job-localisation">Localisation</label><input type="text" id="job-localisation" required placeholder="Ville"></div>
+            <div>
+              <label for="job-contrat">Type de contrat</label>
+              <select id="job-contrat" required>
+                <option>CDI</option><option>CDD</option><option>Intérim</option>
+                <option>Alternance</option><option>Stage</option><option>Freelance</option>
+              </select>
+            </div>
+          </div>
+          <div class="row">
+            <div>
+              <label for="job-diplome">Diplôme requis</label>
+              <select id="job-diplome">
+                <option value="">Non précisé</option>
+                <option>Aucun</option><option>CAP/BEP</option><option>Bac</option>
+                <option>Bac+2</option><option>Bac+3</option><option>Bac+5</option><option>Bac+8</option>
+              </select>
+            </div>
+            <div>
+              <label for="job-secteur">Secteur</label>
+              <select id="job-secteur">
+                <option value="">Non précisé</option>
+                <option>BTP</option><option>Restauration</option><option>Informatique</option>
+                <option>Santé</option><option>Commerce</option><option>Transport</option>
+                <option>Industrie</option><option>Autre</option>
+              </select>
+            </div>
+            <div>
+              <label for="job-experience">Expérience requise</label>
+              <select id="job-experience">
+                <option value="">Non précisé</option>
+                <option>Débutant accepté</option><option>1-3 ans</option><option>3-5 ans</option><option>5 ans et plus</option>
+              </select>
+            </div>
+          </div>
+          <div class="row">
+            <div><label for="job-salaire-min">Salaire min (€/mois)</label><input type="number" id="job-salaire-min" placeholder="1800"></div>
+            <div><label for="job-salaire-max">Salaire max (€/mois)</label><input type="number" id="job-salaire-max" placeholder="2200"></div>
+            <div>
+              <label for="job-teletravail">Télétravail</label>
+              <select id="job-teletravail">
+                <option>Sur site</option><option>Hybride</option><option>100% télétravail</option>
+              </select>
+            </div>
+          </div>
+          <div><label for="job-description">Description du poste</label><textarea id="job-description" required placeholder="Missions, profil recherché..."></textarea></div>
+          <div class="row">
+            <button type="submit" class="btn-primary" id="job-submit-btn" style="flex:0 0 auto;">Publier l'offre</button>
+            <button type="button" class="btn-ghost hidden" id="job-cancel-edit" style="flex:0 0 auto; color:var(--ink); border-color:var(--border);">Annuler la modification</button>
+          </div>
+          <div id="job-msg"></div>
+        </form>
+      </div>
+    </div>
+
+    <div class="tab-panel" id="tab-mes-offres">
+      <div class="panel"><h2>Mes offres publiées</h2><div id="my-jobs-list"></div></div>
+    </div>
+  </section>
+
+</main>
+
+<footer>
+  Taffline
+  <div style="margin-top:8px;">
+    <a href="#" id="link-cgu">CGU</a> · <a href="#" id="link-confidentialite">Confidentialité</a>
+  </div>
+</footer>
+
+<div id="legal-modal" class="modal-overlay hidden">
+  <div class="modal-box">
+    <button class="modal-close" id="legal-close">×</button>
+    <div id="legal-content"></div>
+  </div>
+</div>
+
+<script>
+  // ============================================================
+  // CONFIGURATION — remplace ces deux valeurs par les tiennes
+  // (Supabase > Project Settings > API)
+  // ============================================================
+  const SUPABASE_URL = "https://TON-PROJET.supabase.co";
+  const SUPABASE_ANON_KEY = "TA_CLE_ANON_PUBLIC_ICI";
+
+  const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+  let currentMode = "candidat";
+  let currentUser = null;
+  let currentProfile = null;
+  let authIsSignup = true;
+
+  const modeSwitch = document.getElementById("mode-switch");
+  const modeCandidatBtn = document.getElementById("mode-candidat");
+  const modeRecruteurBtn = document.getElementById("mode-recruteur");
+  const viewCandidat = document.getElementById("view-candidat");
+  const viewRecruteur = document.getElementById("view-recruteur");
+  const authPanel = document.getElementById("auth-panel");
+  const authForm = document.getElementById("auth-form");
+  const authTitle = document.getElementById("auth-title");
+  const authSubmit = document.getElementById("auth-submit");
+  const authMsg = document.getElementById("auth-msg");
+  const toggleAuthModeBtn = document.getElementById("toggle-auth-mode");
+  const entrepriseField = document.getElementById("entreprise-field");
+  const niveauEtudeField = document.getElementById("niveau-etude-field");
+  const btnShowAuth = document.getElementById("btn-show-auth");
+  const btnLogout = document.getElementById("btn-logout");
+  const userInfo = document.getElementById("user-info");
+
+  document.getElementById("brand-home").addEventListener("click", () => window.scrollTo({top:0, behavior:"smooth"}));
+
+  // ---------- TABS ----------
+  document.querySelectorAll(".tab-btn").forEach(btn => {
+    btn.addEventListener("click", () => {
+      const container = btn.closest("section");
+      container.querySelectorAll(".tab-btn").forEach(b => b.classList.remove("active"));
+      container.querySelectorAll(".tab-panel").forEach(p => p.classList.remove("active"));
+      btn.classList.add("active");
+      const panel = document.getElementById("tab-" + btn.dataset.tab);
+      panel.classList.add("active");
+
+      if (btn.dataset.tab === "candidatures") loadMyApplications();
+      if (btn.dataset.tab === "favoris") loadFavorites();
+      if (btn.dataset.tab === "mon-profil") loadProfileForm();
+      if (btn.dataset.tab === "mes-offres") loadMyJobs();
+    });
+  });
+
+  // ---------- MODE CANDIDAT / RECRUTEUR ----------
+  function setMode(mode) {
+    currentMode = mode;
+    modeSwitch.classList.toggle("recruteur", mode === "recruteur");
+    modeCandidatBtn.classList.toggle("active", mode === "candidat");
+    modeRecruteurBtn.classList.toggle("active", mode === "recruteur");
+    viewCandidat.classList.toggle("hidden", mode !== "candidat");
+    viewRecruteur.classList.toggle("hidden", mode !== "recruteur");
+    entrepriseField.classList.toggle("hidden", mode !== "recruteur");
+    niveauEtudeField.classList.toggle("hidden", mode === "recruteur");
+    authTitle.textContent = authIsSignup
+      ? (mode === "recruteur" ? "Créer un compte recruteur" : "Créer un compte candidat")
+      : "Se connecter";
+
+    if (mode === "recruteur") {
+      document.getElementById("hero-title").textContent = "Taffline, la ligne de l'emploi.";
+      document.getElementById("hero-subtitle").textContent = "";
+    } else {
+      document.getElementById("hero-title").textContent = "Trouve ton taf et ta line.";
+      document.getElementById("hero-subtitle").textContent = "";
+    }
+
+    if (mode === "candidat") loadJobs();
+    if (mode === "recruteur" && currentUser) loadMyJobs();
+  }
+  modeCandidatBtn.addEventListener("click", () => setMode("candidat"));
+  modeRecruteurBtn.addEventListener("click", () => setMode("recruteur"));
+
+  // ---------- AUTH ----------
+  btnShowAuth.addEventListener("click", () => authPanel.classList.toggle("hidden"));
+
+  toggleAuthModeBtn.addEventListener("click", () => {
+    authIsSignup = !authIsSignup;
+    document.getElementById("signup-fields").classList.toggle("hidden", !authIsSignup);
+    authSubmit.textContent = authIsSignup ? "Créer mon compte" : "Se connecter";
+    toggleAuthModeBtn.textContent = authIsSignup ? "Se connecter" : "Créer un compte";
+    authTitle.textContent = authIsSignup
+      ? (currentMode === "recruteur" ? "Créer un compte recruteur" : "Créer un compte candidat")
+      : "Se connecter";
+  });
+
+  authForm.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    authMsg.innerHTML = "";
+    const email = document.getElementById("email").value.trim();
+    const password = document.getElementById("password").value;
+
+    if (authIsSignup) {
+      const nom_complet = document.getElementById("nom_complet").value.trim();
+      const entreprise = document.getElementById("entreprise").value.trim();
+      const niveau_etude = document.getElementById("niveau_etude").value;
+
+      const { error } = await supabase.auth.signUp({
+        email, password,
+        options: { data: {
+          role: currentMode,
+          nom_complet,
+          entreprise: currentMode === "recruteur" ? entreprise : null,
+          niveau_etude: currentMode === "candidat" ? niveau_etude : null
+        }}
+      });
+      if (error) { authMsg.innerHTML = `<div class="msg error">${error.message}</div>`; return; }
+      authMsg.innerHTML = `<div class="msg success">Compte créé ! Vérifie ta boîte mail pour confirmer ton adresse, puis connecte-toi.</div>`;
+    } else {
+      const { error } = await supabase.auth.signInWithPassword({ email, password });
+      if (error) { authMsg.innerHTML = `<div class="msg error">${error.message}</div>`; return; }
+      authPanel.classList.add("hidden");
+      await refreshSession();
+    }
+  });
+
+  btnLogout.addEventListener("click", async () => { await supabase.auth.signOut(); await refreshSession(); });
+
+  async function refreshSession() {
+    const { data: { session } } = await supabase.auth.getSession();
+    currentUser = session ? session.user : null;
+
+    if (currentUser) {
+      const { data: profile } = await supabase.from("profiles").select("*").eq("id", currentUser.id).single();
+      currentProfile = profile;
+      userInfo.textContent = profile ? `${profile.nom_complet} (${profile.role})` : currentUser.email;
+      btnShowAuth.classList.add("hidden");
+      btnLogout.classList.remove("hidden");
+      setMode(profile && profile.role === "recruteur" ? "recruteur" : "candidat");
+    } else {
+      currentProfile = null;
+      userInfo.textContent = "Non connecté";
+      btnShowAuth.classList.remove("hidden");
+      btnLogout.classList.add("hidden");
+    }
+  }
+
+  // ---------- RECHERCHE D'OFFRES (candidat) ----------
+  async function loadJobs() {
+    const listEl = document.getElementById("jobs-list");
+    listEl.innerHTML = `<div class="empty-state">Chargement des offres...</div>`;
+
+    const keyword = document.getElementById("search-keyword").value.trim();
+    const loc = document.getElementById("search-localisation").value.trim();
+    const contrat = document.getElementById("search-contrat").value;
+    const diplome = document.getElementById("search-diplome").value;
+    const secteur = document.getElementById("search-secteur").value;
+    const experience = document.getElementById("search-experience").value;
+    const teletravail = document.getElementById("search-teletravail").value;
+
+    let query = supabase.from("jobs").select("*").eq("is_active", true).order("created_at", { ascending: false });
+    if (keyword) query = query.ilike("titre", `%${keyword}%`);
+    if (loc) query = query.ilike("localisation", `%${loc}%`);
+    if (contrat) query = query.eq("type_contrat", contrat);
+    if (diplome) query = query.eq("diplome_requis", diplome);
+    if (secteur) query = query.eq("secteur", secteur);
+    if (experience) query = query.eq("experience_requise", experience);
+    if (teletravail) query = query.eq("teletravail", teletravail);
+
+    const { data: jobs, error } = await query;
+    if (error) { listEl.innerHTML = `<div class="msg error">${error.message}</div>`; return; }
+    if (!jobs || jobs.length === 0) { listEl.innerHTML = `<div class="empty-state">Aucune offre ne correspond à ta recherche.</div>`; return; }
+
+    let favoriteIds = new Set();
+    let appliedIds = new Set();
+    if (currentUser && currentProfile && currentProfile.role === "candidat") {
+      const { data: favs } = await supabase.from("favorites").select("job_id").eq("candidat_id", currentUser.id);
+      if (favs) favoriteIds = new Set(favs.map(f => f.job_id));
+      const { data: apps } = await supabase.from("applications").select("job_id").eq("candidat_id", currentUser.id);
+      if (apps) appliedIds = new Set(apps.map(a => a.job_id));
+    }
+
+    listEl.innerHTML = jobs.map(job => renderJobCard(job, favoriteIds.has(job.id), appliedIds.has(job.id))).join("");
+    attachJobCardHandlers();
+  }
+
+  function renderJobCard(job, isFavorite, hasApplied) {
+    return `
+      <div class="job-card">
+        <h3>${escapeHtml(job.titre)}</h3>
+        <div class="job-meta">
+          <span class="tag">${escapeHtml(job.type_contrat)}</span>
+          ${job.diplome_requis ? `<span class="tag">${escapeHtml(job.diplome_requis)}</span>` : ''}
+          ${job.experience_requise ? `<span class="tag">${escapeHtml(job.experience_requise)}</span>` : ''}
+          <span>${escapeHtml(job.entreprise)}</span>
+          <span>📍 ${escapeHtml(job.localisation)}</span>
+          <span>${job.teletravail === 'Sur site' ? '🏢' : '🏠'} ${escapeHtml(job.teletravail || 'Sur site')}</span>
+          ${job.salaire_min ? `<span>💶 ${job.salaire_min}€${job.salaire_max ? ' - ' + job.salaire_max + '€' : ''} /mois</span>` : ''}
+        </div>
+        <div class="job-desc">${escapeHtml(job.description)}</div>
+        <div class="job-actions">
+          <button class="btn-outline btn-postuler btn-small" data-job-id="${job.id}" ${hasApplied ? 'disabled' : ''}>
+            ${hasApplied ? 'Candidature envoyée ✓' : 'Postuler'}
+          </button>
+          <button class="btn-ghost btn-favori btn-small" data-job-id="${job.id}" style="color:var(--ink); border:1.5px solid var(--border);">
+            ${isFavorite ? '★ Retirer des favoris' : '☆ Ajouter aux favoris'}
+          </button>
+        </div>
+      </div>`;
+  }
+
+  function attachJobCardHandlers() {
+    document.querySelectorAll(".btn-postuler").forEach(btn => btn.addEventListener("click", () => postuler(btn.dataset.jobId, btn)));
+    document.querySelectorAll(".btn-favori").forEach(btn => btn.addEventListener("click", () => toggleFavorite(btn.dataset.jobId, btn)));
+  }
+
+  async function postuler(jobId, btn) {
+    if (!currentUser) { alert("Connecte-toi d'abord pour postuler."); authPanel.classList.remove("hidden"); return; }
+    if (!currentProfile || currentProfile.role !== "candidat") { alert("Seuls les comptes candidat peuvent postuler."); return; }
+    const { error } = await supabase.from("applications").insert({ job_id: jobId, candidat_id: currentUser.id });
+    if (error) { alert("Erreur : " + error.message); return; }
+    btn.textContent = "Candidature envoyée ✓";
+    btn.disabled = true;
+  }
+
+  async function toggleFavorite(jobId, btn) {
+    if (!currentUser) { alert("Connecte-toi d'abord."); authPanel.classList.remove("hidden"); return; }
+    const isFav = btn.textContent.includes("Retirer");
+    if (isFav) {
+      await supabase.from("favorites").delete().eq("candidat_id", currentUser.id).eq("job_id", jobId);
+      btn.innerHTML = "☆ Ajouter aux favoris";
+    } else {
+      const { error } = await supabase.from("favorites").insert({ candidat_id: currentUser.id, job_id: jobId });
+      if (error) { alert("Erreur : " + error.message); return; }
+      btn.innerHTML = "★ Retirer des favoris";
+    }
+  }
+
+  document.getElementById("btn-search").addEventListener("click", loadJobs);
+
+  // ---------- MES CANDIDATURES (candidat) ----------
+  async function loadMyApplications() {
+    const listEl = document.getElementById("my-applications-list");
+    if (!currentUser) { listEl.innerHTML = `<div class="empty-state">Connecte-toi pour voir tes candidatures.</div>`; return; }
+    listEl.innerHTML = `<div class="empty-state">Chargement...</div>`;
+
+    const { data: apps, error } = await supabase
+      .from("applications")
+      .select("*, jobs(titre, entreprise, localisation, type_contrat)")
+      .eq("candidat_id", currentUser.id)
+      .order("created_at", { ascending: false });
+
+    if (error) { listEl.innerHTML = `<div class="msg error">${error.message}</div>`; return; }
+    if (!apps || apps.length === 0) { listEl.innerHTML = `<div class="empty-state">Tu n'as pas encore postulé à une offre.</div>`; return; }
+
+    listEl.innerHTML = apps.map(app => `
+      <div class="job-card">
+        <h3>${escapeHtml(app.jobs?.titre || "Offre supprimée")}</h3>
+        <div class="job-meta">
+          <span>${escapeHtml(app.jobs?.entreprise || "")}</span>
+          <span>📍 ${escapeHtml(app.jobs?.localisation || "")}</span>
+          <span class="status-badge status-${app.statut}">${escapeHtml(app.statut)}</span>
+        </div>
+      </div>`).join("");
+  }
+
+  // ---------- MES FAVORIS (candidat) ----------
+  async function loadFavorites() {
+    const listEl = document.getElementById("favorites-list");
+    if (!currentUser) { listEl.innerHTML = `<div class="empty-state">Connecte-toi pour voir tes favoris.</div>`; return; }
+    listEl.innerHTML = `<div class="empty-state">Chargement...</div>`;
+
+    const { data: favs, error } = await supabase
+      .from("favorites")
+      .select("job_id, jobs(*)")
+      .eq("candidat_id", currentUser.id)
+      .order("created_at", { ascending: false });
+
+    if (error) { listEl.innerHTML = `<div class="msg error">${error.message}</div>`; return; }
+    if (!favs || favs.length === 0) { listEl.innerHTML = `<div class="empty-state">Aucune offre en favoris pour l'instant.</div>`; return; }
+
+    const { data: apps } = await supabase.from("applications").select("job_id").eq("candidat_id", currentUser.id);
+    const appliedIds = new Set((apps || []).map(a => a.job_id));
+
+    listEl.innerHTML = favs.filter(f => f.jobs).map(f => renderJobCard(f.jobs, true, appliedIds.has(f.job_id))).join("");
+    attachJobCardHandlers();
+  }
+
+  // ---------- MON PROFIL (candidat) ----------
+  async function loadProfileForm() {
+    if (!currentProfile) return;
+    document.getElementById("profile-nom").value = currentProfile.nom_complet || "";
+    document.getElementById("profile-tel").value = currentProfile.telephone || "";
+    document.getElementById("profile-niveau").value = currentProfile.niveau_etude || "";
+    document.getElementById("cv-current").innerHTML = currentProfile.cv_url
+      ? `CV actuel : <a href="${currentProfile.cv_url}" target="_blank">voir le fichier</a>`
+      : "Aucun CV enregistré pour l'instant.";
+  }
+
+  document.getElementById("profile-form").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const msgEl = document.getElementById("profile-msg");
+    msgEl.innerHTML = "";
+    if (!currentUser) return;
+
+    let cv_url = currentProfile.cv_url;
+    const fileInput = document.getElementById("profile-cv");
+    if (fileInput.files.length > 0) {
+      const file = fileInput.files[0];
+      const path = `${currentUser.id}/cv.pdf`;
+      const { error: uploadError } = await supabase.storage.from("cvs").upload(path, file, { upsert: true });
+      if (uploadError) { msgEl.innerHTML = `<div class="msg error">Erreur upload CV : ${uploadError.message}</div>`; return; }
+      const { data: pub } = supabase.storage.from("cvs").getPublicUrl(path);
+      cv_url = pub.publicUrl;
+    }
+
+    const { error } = await supabase.from("profiles").update({
+      nom_complet: document.getElementById("profile-nom").value.trim(),
+      telephone: document.getElementById("profile-tel").value.trim(),
+      niveau_etude: document.getElementById("profile-niveau").value,
+      cv_url
+    }).eq("id", currentUser.id);
+
+    if (error) { msgEl.innerHTML = `<div class="msg error">${error.message}</div>`; return; }
+    msgEl.innerHTML = `<div class="msg success">Profil mis à jour !</div>`;
+    await refreshSession();
+    loadProfileForm();
+  });
+
+  // ---------- PUBLIER / MODIFIER UNE OFFRE (recruteur) ----------
+  const jobForm = document.getElementById("job-form");
+  const jobSubmitBtn = document.getElementById("job-submit-btn");
+  const jobCancelEditBtn = document.getElementById("job-cancel-edit");
+  const jobFormTitle = document.getElementById("job-form-title");
+
+  jobForm.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const msgEl = document.getElementById("job-msg");
+    msgEl.innerHTML = "";
+
+    if (!currentUser || !currentProfile || currentProfile.role !== "recruteur") {
+      msgEl.innerHTML = `<div class="msg error">Connecte-toi avec un compte recruteur pour publier une offre.</div>`;
+      return;
+    }
+
+    const payload = {
+      titre: document.getElementById("job-titre").value.trim(),
+      entreprise: document.getElementById("job-entreprise").value.trim(),
+      localisation: document.getElementById("job-localisation").value.trim(),
+      type_contrat: document.getElementById("job-contrat").value,
+      diplome_requis: document.getElementById("job-diplome").value || null,
+      secteur: document.getElementById("job-secteur").value || null,
+      experience_requise: document.getElementById("job-experience").value || null,
+      teletravail: document.getElementById("job-teletravail").value,
+      salaire_min: document.getElementById("job-salaire-min").value || null,
+      salaire_max: document.getElementById("job-salaire-max").value || null,
+      description: document.getElementById("job-description").value.trim()
+    };
+
+    const editId = document.getElementById("job-edit-id").value;
+    let error;
+    if (editId) {
+      ({ error } = await supabase.from("jobs").update(payload).eq("id", editId));
+    } else {
+      payload.recruteur_id = currentUser.id;
+      ({ error } = await supabase.from("jobs").insert(payload));
+    }
+
+    if (error) { msgEl.innerHTML = `<div class="msg error">${error.message}</div>`; return; }
+    msgEl.innerHTML = `<div class="msg success">${editId ? "Offre modifiée !" : "Offre publiée !"}</div>`;
+    resetJobForm();
+    loadMyJobs();
+  });
+
+  function resetJobForm() {
+    jobForm.reset();
+    document.getElementById("job-edit-id").value = "";
+    jobSubmitBtn.textContent = "Publier l'offre";
+    jobFormTitle.textContent = "Publier une offre";
+    jobCancelEditBtn.classList.add("hidden");
+  }
+  jobCancelEditBtn.addEventListener("click", resetJobForm);
+
+  async function loadMyJobs() {
+    if (!currentUser) return;
+    const listEl = document.getElementById("my-jobs-list");
+    listEl.innerHTML = `<div class="empty-state">Chargement...</div>`;
+
+    const { data: jobs, error } = await supabase.from("jobs").select("*").eq("recruteur_id", currentUser.id).order("created_at", { ascending: false });
+    if (error) { listEl.innerHTML = `<div class="msg error">${error.message}</div>`; return; }
+    if (!jobs || jobs.length === 0) { listEl.innerHTML = `<div class="empty-state">Tu n'as pas encore publié d'offre.</div>`; return; }
+
+    // Compter les candidatures par offre
+    const jobIds = jobs.map(j => j.id);
+    const { data: allApps } = await supabase.from("applications").select("*, profiles(nom_complet, telephone, cv_url)").in("job_id", jobIds);
+    const appsByJob = {};
+    (allApps || []).forEach(a => { (appsByJob[a.job_id] ||= []).push(a); });
+
+    listEl.innerHTML = jobs.map(job => {
+      const apps = appsByJob[job.id] || [];
+      return `
+      <div class="job-card ${job.is_active ? '' : 'inactive'}">
+        <h3>${escapeHtml(job.titre)}</h3>
+        <div class="job-meta">
+          <span class="tag">${escapeHtml(job.type_contrat)}</span>
+          <span>📍 ${escapeHtml(job.localisation)}</span>
+          <span>${job.is_active ? '🟢 Active' : '⚪ Désactivée'}</span>
+          <span>👤 ${apps.length} candidature${apps.length > 1 ? 's' : ''}</span>
+        </div>
+        <div class="job-actions">
+          <button class="btn-outline btn-small btn-edit-job" data-job-id="${job.id}">Modifier</button>
+          <button class="btn-ghost btn-small btn-toggle-active" data-job-id="${job.id}" data-active="${job.is_active}" style="color:var(--ink); border:1.5px solid var(--border);">
+            ${job.is_active ? 'Désactiver' : 'Réactiver'}
+          </button>
+          <button class="btn-danger btn-small btn-delete-job" data-job-id="${job.id}">Supprimer</button>
+          ${apps.length > 0 ? `<button class="btn-primary btn-small btn-view-applicants" data-job-id="${job.id}">Voir les candidatures</button>` : ''}
+        </div>
+        <div class="applicants-box hidden" id="applicants-${job.id}" style="margin-top:14px; border-top:1px solid var(--border); padding-top:14px;">
+          ${apps.map(a => `
+            <div class="applicant-row">
+              <div class="applicant-info">
+                <strong>${escapeHtml(a.profiles?.nom_complet || 'Candidat')}</strong>
+                ${a.profiles?.telephone ? ' · ' + escapeHtml(a.profiles.telephone) : ''}
+                ${a.profiles?.cv_url ? ` · <a href="${a.profiles.cv_url}" target="_blank">Voir le CV</a>` : ''}
+              </div>
+              <select class="statut-select" data-app-id="${a.id}">
+                <option value="envoyée" ${a.statut === 'envoyée' ? 'selected' : ''}>Envoyée</option>
+                <option value="vue" ${a.statut === 'vue' ? 'selected' : ''}>Vue</option>
+                <option value="acceptée" ${a.statut === 'acceptée' ? 'selected' : ''}>Acceptée</option>
+                <option value="refusée" ${a.statut === 'refusée' ? 'selected' : ''}>Refusée</option>
+              </select>
+            </div>
+          `).join("")}
+        </div>
+      </div>`;
+    }).join("");
+
+    document.querySelectorAll(".btn-edit-job").forEach(btn => btn.addEventListener("click", () => editJob(btn.dataset.jobId, jobs)));
+    document.querySelectorAll(".btn-toggle-active").forEach(btn => btn.addEventListener("click", () => toggleJobActive(btn.dataset.jobId, btn.dataset.active === "true")));
+    document.querySelectorAll(".btn-delete-job").forEach(btn => btn.addEventListener("click", () => deleteJob(btn.dataset.jobId)));
+    document.querySelectorAll(".btn-view-applicants").forEach(btn => btn.addEventListener("click", () => {
+      document.getElementById("applicants-" + btn.dataset.jobId).classList.toggle("hidden");
+    }));
+    document.querySelectorAll(".statut-select").forEach(sel => sel.addEventListener("change", async () => {
+      await supabase.from("applications").update({ statut: sel.value }).eq("id", sel.dataset.appId);
+    }));
+  }
+
+  function editJob(jobId, jobs) {
+    const job = jobs.find(j => j.id === jobId);
+    if (!job) return;
+    document.getElementById("job-edit-id").value = job.id;
+    document.getElementById("job-titre").value = job.titre;
+    document.getElementById("job-entreprise").value = job.entreprise;
+    document.getElementById("job-localisation").value = job.localisation;
+    document.getElementById("job-contrat").value = job.type_contrat;
+    document.getElementById("job-diplome").value = job.diplome_requis || "";
+    document.getElementById("job-secteur").value = job.secteur || "";
+    document.getElementById("job-experience").value = job.experience_requise || "";
+    document.getElementById("job-teletravail").value = job.teletravail || "Sur site";
+    document.getElementById("job-salaire-min").value = job.salaire_min || "";
+    document.getElementById("job-salaire-max").value = job.salaire_max || "";
+    document.getElementById("job-description").value = job.description;
+    jobSubmitBtn.textContent = "Enregistrer les modifications";
+    jobFormTitle.textContent = "Modifier l'offre";
+    jobCancelEditBtn.classList.remove("hidden");
+    document.querySelector('.tab-btn[data-tab="publier"]').click();
+    window.scrollTo({ top: document.getElementById("post-job-panel").offsetTop - 90, behavior: "smooth" });
+  }
+
+  async function toggleJobActive(jobId, isActive) {
+    await supabase.from("jobs").update({ is_active: !isActive }).eq("id", jobId);
+    loadMyJobs();
+  }
+
+  async function deleteJob(jobId) {
+    if (!confirm("Supprimer définitivement cette offre ? Cette action est irréversible.")) return;
+    await supabase.from("jobs").delete().eq("id", jobId);
+    loadMyJobs();
+  }
+
+  // ---------- PAGES LÉGALES ----------
+  const legalModal = document.getElementById("legal-modal");
+  const legalContent = document.getElementById("legal-content");
+  document.getElementById("legal-close").addEventListener("click", () => legalModal.classList.add("hidden"));
+  legalModal.addEventListener("click", (e) => { if (e.target === legalModal) legalModal.classList.add("hidden"); });
+
+  document.getElementById("link-cgu").addEventListener("click", (e) => {
+    e.preventDefault();
+    legalContent.innerHTML = `<h2>Conditions Générales d'Utilisation</h2>
+      <p>Taffline met en relation des candidats et des recruteurs. En créant un compte, vous vous engagez à fournir des informations exactes et à utiliser le service de bonne foi.</p>
+      <p>Les recruteurs s'engagent à ne publier que des offres d'emploi réelles et légales. Toute offre frauduleuse ou trompeuse pourra être supprimée sans préavis.</p>
+      <p>Les candidats s'engagent à ne postuler qu'aux offres qui les intéressent réellement.</p>
+      <p style="color:var(--slate); font-size:13px;">Ce texte est un modèle de base à faire relire et compléter par un professionnel du droit avant une mise en ligne publique.</p>`;
+    legalModal.classList.remove("hidden");
+  });
+
+  document.getElementById("link-confidentialite").addEventListener("click", (e) => {
+    e.preventDefault();
+    legalContent.innerHTML = `<h2>Politique de confidentialité</h2>
+      <p>Taffline collecte les données nécessaires au fonctionnement du service : nom, email, téléphone, CV (candidats), et informations sur l'entreprise (recruteurs).</p>
+      <p>Ces données sont stockées de façon sécurisée via Supabase et ne sont jamais vendues à des tiers.</p>
+      <p>Conformément au RGPD, vous pouvez demander l'accès, la modification ou la suppression de vos données à tout moment.</p>
+      <p style="color:var(--slate); font-size:13px;">Ce texte est un modèle de base à faire relire et compléter par un professionnel du droit avant une mise en ligne publique.</p>`;
+    legalModal.classList.remove("hidden");
+  });
+
+  // ---------- UTIL ----------
+  function escapeHtml(str) {
+    const div = document.createElement("div");
+    div.textContent = str ?? "";
+    return div.innerHTML;
+  }
+
+  // ---------- INIT ----------
+  refreshSession();
+  loadJobs();
+</script>
+
+</body>
+</html>
